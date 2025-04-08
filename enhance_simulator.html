@@ -1,0 +1,340 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>강화 시뮬레이터</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background-color: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    .item-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .item {
+      width: 120px;
+      height: 120px;
+      background-color: #ddd;
+      border-radius: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .item.success {
+      background-color: #4CAF50;
+      color: white;
+      transition: background-color 0.3s;
+    }
+    .item.fail {
+      background-color: #F44336;
+      color: white;
+      transition: background-color 0.3s;
+    }
+    .glow {
+      animation: glow 1s;
+    }
+    @keyframes glow {
+      0% {
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+      }
+      70% {
+        box-shadow: 0 0 0 20px rgba(255, 215, 0, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+      }
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #4361ee;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #3a56d4;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    button.auto {
+      background-color: #ff9800;
+    }
+    button.auto:hover {
+      background-color: #e68a00;
+    }
+    button.auto.active {
+      background-color: #e65100;
+    }
+    .stats {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f0f0f0;
+      border-radius: 5px;
+    }
+    .probability {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .probability-bar {
+      height: 20px;
+      background-color: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+    .probability-fill {
+      height: 100%;
+      background-color: #4361ee;
+      width: 60%;
+    }
+    .probability-fill.lower {
+      width: 40%;
+    }
+    .result-animation {
+      position: absolute;
+      font-size: 18px;
+      font-weight: bold;
+      animation: floatUp 1.5s forwards;
+      opacity: 0;
+    }
+    @keyframes floatUp {
+      0% {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-50px);
+        opacity: 0;
+      }
+    }
+    .result-message {
+      text-align: center;
+      margin: 10px 0;
+      font-weight: bold;
+      min-height: 24px;
+    }
+    .speed-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .speed-label {
+      font-size: 14px;
+      margin-bottom: 5px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="item-container">
+      <div id="item" class="item">+0</div>
+      <div id="resultMessage" class="result-message"></div>
+    </div>
+    <div class="controls">
+      <button id="enhanceBtn">강화 시도</button>
+      <button id="autoBtn" class="auto">10강까지 자동 강화</button>
+      <button id="resetBtn">초기화</button>
+      <div class="speed-controls">
+        <label for="speedSelect" class="speed-label">속도 설정</label>
+        <select id="speedSelect">
+          <option value="fast">빠름</option>
+          <option value="normal" selected>보통</option>
+          <option value="slow">느림</option>
+        </select>
+      </div>
+    </div>
+    <div class="stats">
+      <p>현재 강화 단계: <span id="currentLevel">0</span></p>
+      <p>시도 횟수: <span id="attempts">0</span></p>
+      <p>성공 횟수: <span id="successes">0</span></p>
+      <p>실패 횟수: <span id="failures">0</span></p>
+      <p>총 비용: <span id="totalCost">0</span>G</p>
+      <p>10강 도달 횟수: <span id="maxLevelAchieved">0</span></p>
+    </div>
+  </div>
+  <script>
+    const item = document.getElementById('item');
+    const enhanceBtn = document.getElementById('enhanceBtn');
+    const autoBtn = document.getElementById('autoBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const resultMessage = document.getElementById('resultMessage');
+    const speedSelect = document.getElementById('speedSelect');
+    const currentLevelElement = document.getElementById('currentLevel');
+    const attemptsElement = document.getElementById('attempts');
+    const successesElement = document.getElementById('successes');
+    const failuresElement = document.getElementById('failures');
+    const totalCostElement = document.getElementById('totalCost');
+    const maxLevelAchievedElement = document.getElementById('maxLevelAchieved');
+
+    let currentLevel = 0;
+    let attempts = 0;
+    let successes = 0;
+    let failures = 0;
+    let totalCost = 0;
+    let maxLevelAchieved = 0;
+    let autoEnhancing = false;
+    let autoEnhanceInterval = null;
+
+    const speeds = { 'fast': 300, 'normal': 800, 'slow': 1500 };
+    let currentSpeed = speeds['normal'];
+
+    speedSelect.addEventListener('change', function () {
+      currentSpeed = speeds[this.value];
+      if (autoEnhancing) {
+        clearInterval(autoEnhanceInterval);
+        startAutoEnhance();
+      }
+    });
+
+    function getSuccessProbability(level) {
+      return level <= 6 ? 0.6 : 0.4;
+    }
+
+    function attemptEnhance() {
+      if (currentLevel >= 10) {
+        resultMessage.textContent = "이미 최대 강화 단계입니다!";
+        if (autoEnhancing) stopAutoEnhance();
+        return false;
+      }
+
+      totalCost += 5;
+      totalCostElement.textContent = totalCost;
+      attempts++;
+      attemptsElement.textContent = attempts;
+
+      const successProbability = getSuccessProbability(currentLevel);
+      const isSuccess = Math.random() < successProbability;
+
+      const resultAnimation = document.createElement('div');
+      resultAnimation.className = 'result-animation';
+
+      if (isSuccess) {
+        currentLevel++;
+        currentLevelElement.textContent = currentLevel;
+        successes++;
+        successesElement.textContent = successes;
+        item.classList.add('success', 'glow');
+        resultMessage.textContent = "강화 성공!";
+        resultMessage.style.color = "#4CAF50";
+        resultAnimation.textContent = "성공!";
+        resultAnimation.style.color = "#4CAF50";
+
+        if (currentLevel === 10) {
+          maxLevelAchieved++;
+          maxLevelAchievedElement.textContent = maxLevelAchieved;
+          if (autoEnhancing) stopAutoEnhance();
+        }
+      } else {
+        failures++;
+        failuresElement.textContent = failures;
+        item.classList.add('fail');
+        resultMessage.textContent = "강화 실패! 0강으로 초기화됩니다.";
+        resultMessage.style.color = "#F44336";
+        resultAnimation.textContent = "실패!";
+        resultAnimation.style.color = "#F44336";
+        currentLevel = 0;
+        currentLevelElement.textContent = currentLevel;
+      }
+
+      item.appendChild(resultAnimation);
+
+      setTimeout(() => {
+        item.textContent = `+${currentLevel}`;
+        item.classList.remove('success', 'fail', 'glow');
+        setTimeout(() => {
+          if (resultAnimation.parentNode) {
+            resultAnimation.parentNode.removeChild(resultAnimation);
+          }
+        }, 500);
+      }, 500);
+
+      return true;
+    }
+
+    function startAutoEnhance() {
+      autoEnhancing = true;
+      autoBtn.classList.add('active');
+      autoBtn.textContent = "자동 강화 중지";
+      enhanceBtn.disabled = true;
+      autoEnhanceInterval = setInterval(() => {
+        if (currentLevel >= 10) {
+          stopAutoEnhance();
+          return;
+        }
+        attemptEnhance();
+      }, currentSpeed);
+    }
+
+    function stopAutoEnhance() {
+      autoEnhancing = false;
+      autoBtn.classList.remove('active');
+      autoBtn.textContent = "10강까지 자동 강화";
+      enhanceBtn.disabled = false;
+      if (autoEnhanceInterval) {
+        clearInterval(autoEnhanceInterval);
+        autoEnhanceInterval = null;
+      }
+    }
+
+    enhanceBtn.addEventListener('click', attemptEnhance);
+    autoBtn.addEventListener('click', function () {
+      if (autoEnhancing) stopAutoEnhance();
+      else startAutoEnhance();
+    });
+
+    resetBtn.addEventListener('click', function () {
+      if (autoEnhancing) stopAutoEnhance();
+      currentLevel = 0;
+      item.textContent = `+${currentLevel}`;
+      item.classList.remove('success', 'fail', 'glow');
+      resultMessage.textContent = "";
+      currentLevelElement.textContent = currentLevel;
+
+      if (confirm('통계도 모두 초기화하시겠습니까?')) {
+        attempts = 0;
+        successes = 0;
+        failures = 0;
+        totalCost = 0;
+        maxLevelAchieved = 0;
+        attemptsElement.textContent = attempts;
+        successesElement.textContent = successes;
+        failuresElement.textContent = failures;
+        totalCostElement.textContent = totalCost;
+        maxLevelAchievedElement.textContent = maxLevelAchieved;
+      }
+    });
+  </script>
+</body>
+</html>
